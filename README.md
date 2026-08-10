@@ -1,11 +1,13 @@
 <div align="center">
 
+<img src="./docs/assets/banner.png" alt="Base de Conhecimento — Suporte de TI / HelpDesk" width="100%" />
+
 # 🎧 Base de Conhecimento — Suporte de TI / HelpDesk
 
 **Procedimentos, troubleshooting e fluxos de atendimento documentados para o dia a dia de suporte de TI**
 
-[![Last Commit](https://img.shields.io/github/last-commit/4ndreLuiz2807/helpdesk-kb?color=0078D4&label=último%20commit)](https://github.com/4ndreLuiz2807/helpdesk-kb/commits/main)
-[![Artigos](https://img.shields.io/badge/artigos-7-0078D4)](./artigos)
+[![Last Commit](https://img.shields.io/github/last-commit/4ndreLuiz2807/helpdesk-kb?color=00A88E&label=último%20commit)](https://github.com/4ndreLuiz2807/helpdesk-kb/commits/main)
+[![Artigos](https://img.shields.io/badge/artigos-7-00A88E)](./artigos)
 [![License](https://img.shields.io/badge/licença-MIT-blue.svg)](./LICENSE)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5391FE?logo=powershell&logoColor=white)](./scripts)
 
@@ -36,6 +38,8 @@ helpdesk-kb/
 ├── README.md
 ├── LICENSE
 ├── docs/
+│   ├── assets/
+│   │   └── banner.png            # Banner do repositório
 │   └── modelos/
 │       ├── modelo-artigo.md      # Modelo padrão para novos artigos
 │       └── modelo-fluxo.md       # Modelo padrão para novos fluxos de atendimento
