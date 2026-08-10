@@ -1,0 +1,6 @@
+*.env
+secrets.json
+*.pfx
+*.key
+.DS_Store
+Thumbs.db
