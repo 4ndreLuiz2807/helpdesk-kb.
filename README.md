@@ -2,8 +2,6 @@
 
 <img src="./docs/assets/banner.png" alt="Base de Conhecimento — Suporte de TI / HelpDesk" width="100%" />
 
-# 🎧 Base de Conhecimento — Suporte de TI / HelpDesk
-
 **Procedimentos, troubleshooting e fluxos de atendimento documentados para o dia a dia de suporte de TI**
 
 [![Last Commit](https://img.shields.io/github/last-commit/4ndreLuiz2807/helpdesk-kb?color=00A88E&label=último%20commit)](https://github.com/4ndreLuiz2807/helpdesk-kb/commits/main)
