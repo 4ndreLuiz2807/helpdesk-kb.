@@ -27,10 +27,13 @@ GPO-AD-BANK/
 │   └── <nome-da-gpo>/
 │       ├── <script>.ps1
 │       └── README.md           # tipo (usuário/computador), esquema, passo a passo de aplicação
-└── scripts-startup/            # GPOs de Computador — Startup Scripts (quando houver)
+├── scripts-startup/            # GPOs de Computador — Startup Scripts (quando houver)
+│   └── <nome-da-gpo>/
+│       ├── <script>.ps1
+│       └── README.md
+└── gpo-nativas/                 # GPOs via GPP/ADMX nativo (sem script) — Computador e/ou Usuário
     └── <nome-da-gpo>/
-        ├── <script>.ps1
-        └── README.md
+        └── README.md           # cada configuração documentada com seu próprio tipo
 ```
 
 Cada GPO fica na pasta correspondente ao seu **tipo** (Usuário ou
@@ -43,6 +46,7 @@ de vínculo.
 | GPO | Tipo | Categoria | Descrição |
 |---|---|---|---|
 | [Mapeamento de Atalhos no Desktop](./scripts-logon/mapeamento-atalhos-desktop/) | Usuário | Logon Script | Cria atalhos na área de trabalho do usuário para cada arquivo presente em uma pasta de rede compartilhada |
+| [Wallpaper Institucional](./gpo-nativas/wallpaper-institucional/) | Computador + Usuário (misto) | GPP / ADMX | Cria pasta e copia imagens no dispositivo (Computador), define wallpaper de desktop (Usuário) e wallpaper de tela de bloqueio (Computador) |
 
 ## 🚀 Como usar este repositório
 
