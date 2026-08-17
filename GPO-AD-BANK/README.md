@@ -22,31 +22,27 @@ Cada entrada inclui o script em si, o contexto de onde a GPO é vinculada
 GPO-AD-BANK/
 ├── README.md
 ├── docs/
-│   └── assets/          # Banner e imagens
-└── <categoria>/
+│   └── assets/                # Banner e imagens
+├── scripts-logon/              # GPOs de Usuário — Logon Scripts
+│   └── <nome-da-gpo>/
+│       ├── <script>.ps1
+│       └── README.md           # tipo (usuário/computador), esquema, passo a passo de aplicação
+└── scripts-startup/            # GPOs de Computador — Startup Scripts (quando houver)
     └── <nome-da-gpo>/
-        ├── script.ps1
-        └── README.md     # contexto: onde a GPO é vinculada, escopo, comportamento
+        ├── <script>.ps1
+        └── README.md
 ```
+
+Cada GPO fica na pasta correspondente ao seu **tipo** (Usuário ou
+Computador), já que isso muda o caminho de configuração no GPMC. O README
+de cada GPO documenta o motivo do tipo escolhido e o passo a passo exato
+de vínculo.
 
 ## 📋 GPOs mapeadas
 
-| GPO | Categoria | Descrição |
-|---|---|---|
-| [Mapeamento de Atalhos no Desktop](./Mp-atalho-desktop.ps1) | Logon Script | Cria atalhos na área de trabalho do usuário para cada arquivo presente em uma pasta de rede compartilhada |
-
-### Mapeamento de Atalhos no Desktop
-
-**Vínculo da GPO:** Configuração do Usuário → Políticas → Configurações do
-Windows → Scripts → Logon.
-
-**O que faz:** ao logar, o script varre uma pasta de rede (`$PastaOrigem`,
-a mesma pasta onde o script está publicado ou outro caminho UNC acessível)
-e cria um atalho `.lnk` na área de trabalho para cada arquivo encontrado —
-sem duplicar atalhos que já existem.
-
-**Uso:** ajuste a variável `$PastaOrigem` no início do script para apontar
-para o compartilhamento de rede desejado antes de publicar na GPO.
+| GPO | Tipo | Categoria | Descrição |
+|---|---|---|---|
+| [Mapeamento de Atalhos no Desktop](./scripts-logon/mapeamento-atalhos-desktop/) | Usuário | Logon Script | Cria atalhos na área de trabalho do usuário para cada arquivo presente em uma pasta de rede compartilhada |
 
 ## 🚀 Como usar este repositório
 
