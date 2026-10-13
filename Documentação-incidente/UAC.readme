@@ -1,1 +1,244 @@
+# Windows 11 — recuperação da execução como administrador
+
+**Registro do atendimento:** 13/10/2026  
+**Resultado:** problema resolvido, conforme confirmação de André Luiz.  
+**Escopo:** recuperar a solicitação de credenciais administrativas no computador atendido.
+
+## Resumo do caso
+
+O Windows 11 permitia abrir o Prompt de Comando normalmente, mas as operações que precisavam de administrador falhavam. A janela para informar a conta administrativa não aparecia.
+
+O diagnóstico encontrou `EnableLUA = 0x0`, configuração que desativa o Controle de Conta de Usuário (UAC). A sessão do colaborador continuava sem privilégios administrativos. A correção orientada foi iniciar um CMD com a conta administrativa usando `runas`, alterar `EnableLUA` para `1` e reiniciar o computador.
+
+O usuário confirmou que o procedimento funcionou. As verificações após a correção estão descritas neste documento para reutilização em outros atendimentos.
+
+## 1. Ambiente e evidências
+
+| Item | Evidência observada | Interpretação |
+|---|---|---|
+| Sistema | Windows 11; terminal exibindo compilação `10.0.26100.9448` | Ambiente do atendimento |
+| Conta da sessão original | `BIOAROEIRA\danielsilvestre` | Identidade usada no CMD comum |
+| Grupo Administradores | Consulta ao SID `S-1-5-32-544` sem retorno | O grupo não aparecia no token daquela sessão |
+| Serviço `Appinfo` | `TIPO_DE_INÍCIO: 3 DEMAND_START` | Configurado para início manual; a consulta não indicava serviço desativado |
+| `ConsentPromptBehaviorUser` | `0x3` | Política configurada para solicitar credenciais a usuários comuns |
+| `EnableLUA` | `0x0` | UAC desativado |
+| Conta administrativa informada | `BIOAROEIRA\admandresilva` | Conta utilizada na tentativa de `runas` |
+
+A ausência do grupo Administradores e as recusas de operações administrativas mostravam que o CMD original não tinha o contexto necessário para efetuar a correção.
+
+O valor de `EnableLUA` comprovou a configuração desativada. A configuração de início de `Appinfo`, isoladamente, não comprova toda a saúde do serviço.
+
+**Outras mensagens do atendimento:**
+
+- O CMD informou que não podia usar uma pasta de rede UNC como diretório atual e passou a usar a pasta do Windows. Esse aviso se refere ao diretório de trabalho.
+- O DISM informou que precisava de permissões elevadas. Isso refletia os privilégios insuficientes daquele processo.
+- O Explorador recusou o acesso a uma pasta chamada `Temp`, inclusive após clicar em **Continuar**, sem permitir informar a conta administrativa.
+
+A pasta de rede inicial e a mensagem do DISM ajudaram a entender o contexto, mas a correção foi direcionada à configuração do UAC.
+
+## 2. Por que o problema aconteceu?
+
+### 2.1. Uma conta comum continua sendo uma conta comum
+
+Cada processo do Windows executa com uma identidade e um conjunto de permissões, representados por um **token de acesso**. Abrir o CMD não concede automaticamente acesso administrativo.
+
+Uma conta comum pode utilizar programas e recursos permitidos para ela. Operações de manutenção do sistema ou alterações protegidas exigem um processo com as permissões correspondentes.
+
+O [modelo de funcionamento do UAC](https://learn.microsoft.com/en-us/windows-server/security/user-account-control/how-user-account-control-works) permite que um usuário comum informe credenciais de outra conta que seja administradora do computador. A autenticação e as permissões dessa conta permitem criar o processo administrativo.
+
+### 2.2. O UAC estava desativado globalmente
+
+A configuração encontrada foi:
+
+```text
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+
+EnableLUA    REG_DWORD    0x0
+```
+
+`EnableLUA` controla a habilitação do UAC. Neste atendimento, o valor `0` desativava o mecanismo, enquanto a sessão original continuava sem privilégios de administrador.
+
+Essa combinação explica o comportamento: a operação administrativa precisava de permissões adicionais, mas a sessão comum não recebia o fluxo normal do UAC para fornecê-las.
+
+| Configuração | Significado |
+|---|---|
+| `EnableLUA = 0` | UAC desativado |
+| `EnableLUA = 1` | UAC habilitado |
+| `ConsentPromptBehaviorUser = 3` | Solicitar credenciais para a elevação de usuários comuns, com UAC habilitado |
+
+Consultar apenas `ConsentPromptBehaviorUser` não era suficiente: a política de pedir credenciais dependia de o UAC estar habilitado. Consulte a [documentação oficial das configurações do UAC](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/settings-and-configuration).
+
+**A origem da desativação não foi identificada no atendimento.** O valor pode ter sido definido por uma alteração manual, script ou política de gerenciamento. Determinar qual mecanismo o alterou exige evidências adicionais.
+
+### 2.3. Por que o `runas` ajudou?
+
+O `runas` solicita usuário e senha pelo terminal e inicia um programa com a identidade informada. Essa autenticação utiliza o serviço de Logon Secundário, em vez de depender da janela de credenciais do UAC.
+
+Com o UAC desativado, uma conta que já possui direitos administrativos no computador pode executar com essas permissões. Por isso, usar a conta administrativa permitiu realizar a alteração protegida no Registro.
+
+**Em um Windows com UAC habilitado, `runas` não garante, sozinho, um processo elevado.** Ele troca a identidade do processo; a elevação também depende do token e das políticas aplicáveis. A documentação de [`runas`](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc771525%28v%3Dws.11%29) descreve a execução com outra conta e os requisitos dessa autenticação.
+
+## 3. Diagnóstico pelo CMD comum
+
+Abra o CMD normalmente e execute uma linha por vez:
+
+```bat
+whoami
+whoami /groups | findstr /c:"S-1-5-32-544"
+sc.exe qc Appinfo
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorUser
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA
+```
+
+Esses comandos consultam a identidade, os grupos da sessão, a configuração do serviço e os valores do Registro.
+
+`S-1-5-32-544` identifica o grupo local Administradores, independentemente do idioma do Windows. Se ele aparecer como **grupo usado somente para negar**, sua presença não significa que o processo esteja elevado. É necessário considerar os atributos do token.
+
+O comando [`whoami`](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami) mostra informações da sessão atual. A Microsoft documenta o SID do grupo Administradores em [Identificadores de segurança](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers).
+
+## 4. Procedimento de correção utilizado
+
+**Condição para aplicar este procedimento:** o diagnóstico confirmou `EnableLUA = 0` e existe uma conta válida com direitos administrativos no computador.
+
+Os nomes abaixo pertencem ao caso atendido. Ao reutilizar o documento, adapte o domínio e a conta administrativa antes de executar.
+
+### 4.1. Abrir um CMD com a conta administrativa
+
+No CMD comum:
+
+```bat
+runas /user:BIOAROEIRA\admandresilva "C:\Windows\System32\cmd.exe /k whoami"
+```
+
+Digite a senha da conta administrativa quando solicitado e pressione **Enter**. Durante a digitação, nenhum caractere aparece no terminal.
+
+O parâmetro `/k whoami` mantém a nova janela aberta e mostra a identidade usada. A saída esperada neste caso é:
+
+```text
+bioaroeira\admandresilva
+```
+
+Se a janela estiver atrás da atual, procure-a com **Alt + Tab**. A correção deve ser executada nessa nova janela.
+
+Para uma conta local, o formato do usuário é `NOMEDOPC\ContaAdmin`. Utilize o nome real do computador e de uma conta administrativa existente.
+
+### 4.2. Reativar o UAC
+
+Na janela aberta com a conta administrativa, execute:
+
+```bat
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA /t REG_DWORD /d 1 /f
+```
+
+A mensagem esperada é:
+
+```text
+A operação foi concluída com êxito.
+```
+
+| Parte do comando | Função |
+|---|---|
+| `reg add` | Criar ou atualizar uma entrada do Registro |
+| `HKLM\...\Policies\System` | Localizar a configuração de sistema nesta máquina |
+| `/v EnableLUA` | Selecionar o valor que será alterado |
+| `/t REG_DWORD` | Definir o tipo numérico da entrada |
+| `/d 1` | Gravar o valor que habilita o UAC |
+| `/f` | Confirmar a gravação sem uma pergunta adicional |
+
+O comando altera especificamente `EnableLUA`. Consulte a [referência de `reg add`](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-add) para os parâmetros.
+
+Se houver **Acesso negado**, confira `whoami` nessa mesma janela e as permissões administrativas da conta utilizada. A identidade de uma conta e suas permissões no computador precisam estar corretas.
+
+### 4.3. Conferir o valor gravado
+
+Ainda na janela administrativa:
+
+```bat
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA
+```
+
+Resultado esperado:
+
+```text
+EnableLUA    REG_DWORD    0x1
+```
+
+A consulta confirma a gravação. A aplicação completa da mudança depende da reinicialização.
+
+### 4.4. Reiniciar o computador
+
+Salve os trabalhos abertos e reinicie pelo menu do Windows. Alterar essa configuração exige reinicializar o sistema, conforme a [referência da política de habilitação do UAC](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/user-account-control-run-all-administrators-in-admin-approval-mode).
+
+### 4.5. Testar a solicitação de credenciais
+
+Após reiniciar:
+
+1. Entre com a conta comum do colaborador.
+2. Pesquise **Prompt de Comando** no menu Iniciar.
+3. Selecione **Executar como administrador**.
+4. Informe a conta administrativa e sua senha quando solicitado.
+5. Verifique a abertura do novo CMD.
+
+A solicitação de credenciais deve voltar, considerando a configuração `ConsentPromptBehaviorUser = 3` observada neste caso.
+
+## 5. Para que servem os programas usados?
+
+| Programa ou componente | Papel no atendimento |
+|---|---|
+| `cmd.exe` | Oferecer o terminal para executar os comandos de diagnóstico e correção |
+| `whoami.exe` | Identificar a conta e os grupos associados ao processo atual |
+| `findstr.exe` | Filtrar a saída de grupos para localizar o SID Administradores |
+| `sc.exe` | Consultar a configuração do serviço `Appinfo` |
+| `reg.exe` | Ler os valores do Registro e gravar `EnableLUA = 1` |
+| `runas.exe` | Solicitar credenciais no terminal e iniciar o CMD com a conta administrativa |
+| UAC | Controlar o fluxo de elevação e a solicitação de consentimento ou credenciais |
+| DISM | Realizar manutenção da imagem do Windows; sua mensagem indicava falta de elevação no CMD original |
+
+O que resolveu o incidente foi a **reativação do UAC**, realizada a partir de um processo com permissões suficientes. O `runas` forneceu o caminho para usar a conta administrativa durante a correção.
+
+## 6. Validação recomendada
+
+O funcionamento foi confirmado pelo usuário. Para registrar a validação técnica em futuros atendimentos, verifique:
+
+- [ ] Computador reiniciado após a mudança.
+- [ ] `EnableLUA` permanece em `0x1` após o reinício.
+- [ ] A opção **Executar como administrador** apresenta a solicitação de credenciais.
+- [ ] Uma conta administrativa válida consegue abrir o CMD elevado.
+- [ ] A operação administrativa necessária ao atendimento funciona nesse contexto.
+
+No CMD elevado, `whoami /groups` deve ser interpretado considerando os atributos do grupo Administradores. O Windows também diferencia processos por níveis de integridade; processos elevados normalmente possuem nível alto. Consulte [Controle de Integridade Obrigatório](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control).
+
+## 7. Se o problema voltar
+
+Se `EnableLUA` voltar a `0` após a reinicialização ou atualização de políticas, investigue o gerenciamento do dispositivo:
+
+- GPO aplicada ao computador.
+- Política do Intune que configure o UAC.
+- Script de inicialização, tarefa agendada ou ferramenta que altere essa chave.
+
+O ponto de configuração equivalente é **User Account Control: Run all administrators in Admin Approval Mode**. No Intune, consulte a categoria **Local Policies Security Options** e a configuração **User Account Control Run All Administrators In Admin Approval Mode**.
+
+A recorrência sugere que outra configuração está reaplicando o valor, mas essa origem precisa ser confirmada. Se houver uma política responsável, a correção deve ocorrer nela com o escopo adequado ao computador.
+
+Se `EnableLUA` continuar em `1` e a solicitação ainda falhar, verifique o funcionamento de `Appinfo` e as políticas de elevação. A configuração manual observada para esse serviço não significa, por si só, falha.
+
+A habilitação do UAC também não concede acesso permanente a qualquer pasta: o acesso à pasta `Temp` continua sujeito às permissões do caminho específico.
+
+## 8. Registro para encerramento do chamado
+
+> Identificada a configuração EnableLUA desativada no computador, impedindo o fluxo normal de solicitação de credenciais administrativas na sessão do usuário comum. Orientada a execução de um CMD com a conta administrativa, a reativação do UAC e a reinicialização do equipamento. O usuário confirmou que o procedimento resolveu o problema.
+
+## Referências
+
+Documentação oficial da Microsoft consultada em 13/10/2026:
+
+1. [Configurações do UAC e valores do Registro](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/settings-and-configuration).
+2. [Funcionamento do UAC](https://learn.microsoft.com/en-us/windows-server/security/user-account-control/how-user-account-control-works).
+3. [Habilitação do UAC e necessidade de reinicialização](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/user-account-control-run-all-administrators-in-admin-approval-mode).
+4. [Comando runas](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc771525%28v%3Dws.11%29).
+5. [Comando reg add](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/reg-add).
+6. [Comando whoami](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/whoami).
+7. [Identificadores de segurança](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers).
+8. [Níveis de integridade dos processos](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control).
+
 
